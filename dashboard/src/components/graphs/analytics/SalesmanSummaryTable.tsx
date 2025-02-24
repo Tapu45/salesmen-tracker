@@ -12,7 +12,9 @@ import {
   Navigation,
   Calendar,
   ArrowLeft,
-  ArrowRight
+  ArrowRight,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 
 interface DataRow {
@@ -25,10 +27,8 @@ interface DataRow {
   locationName: string;
   marketName: string;
   inTime: number;
-  outTime: number;
-  outletsVisited: number;
-  outletsAssigned: number;
   accuracyDistance: number;
+  visited: string; // Add visited property
 }
 
 interface LocationAnalyticsTableProps {
@@ -131,13 +131,13 @@ const LocationAnalyticsTable: React.FC<LocationAnalyticsTableProps> = ({ data })
                 <th className="p-4 bg-gray-50/80">
                   <div className="flex items-center gap-2 text-purple-700">
                     <Clock className="w-4 h-4" />
-                    Time
+                    In Time
                   </div>
                 </th>
-                <th className="p-4 relative bg-white">
-                  <div className="flex items-center gap-2 text-cyan-700">
-                    <Calendar className="w-4 h-4" />
-                    Outlets
+                <th className="p-4">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <CheckCircle className="w-4 h-4" />
+                    Visited
                   </div>
                 </th>
                 <th className="p-4 bg-gray-50/80">
@@ -165,7 +165,7 @@ const LocationAnalyticsTable: React.FC<LocationAnalyticsTableProps> = ({ data })
                   <td className="p-4">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full bg-cyan-100 flex items-center justify-center">
-                      <span className="font-medium">{row.salesmanName || 'N/A'}</span>
+                        <span className="font-medium text-xs">{row.salesmanName?.charAt(0) }</span>
                       </div>
                       <span className="font-medium">{row.salesmanName}</span>
                     </div>
@@ -185,48 +185,29 @@ const LocationAnalyticsTable: React.FC<LocationAnalyticsTableProps> = ({ data })
                     <span className="text-sm font-medium text-indigo-600">{row.marketName}</span>
                   </td>
                   <td className="p-4 bg-gray-50/30">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center justify-between bg-white px-3 py-2 rounded-lg shadow-sm">
-                        <span className="text-sm font-medium text-gray-600">Duration</span>
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-1.5 rounded-full bg-blue-400"></div>
-                          <span className="text-sm font-semibold text-gray-800">
-                            {formatTime(row.outTime - row.inTime)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs">
-                        <div className="text-center px-2 py-1 bg-gray-50 rounded">
-                          <div className="text-gray-500">In</div>
-                          <div className="font-medium text-gray-700">{formatTime(row.inTime)}</div>
-                        </div>
-                        <div className="text-center px-2 py-1 bg-gray-50 rounded">
-                          <div className="text-gray-500">Out</div>
-                          <div className="font-medium text-gray-700">{formatTime(row.outTime)}</div>
-                        </div>
+                    <div className="bg-white px-4 py-3 rounded-lg shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                        <span className="font-medium text-gray-700">{formatTime(row.inTime)}</span>
                       </div>
                     </div>
                   </td>
                   <td className="p-4">
-                    <div className="relative w-24 h-24 flex items-center justify-center z-0">
-                      <svg className="w-full h-full" viewBox="0 0 36 36">
-                        <circle cx="18" cy="18" r="15" fill="none" className="stroke-gray-200" strokeWidth="3"/>
-                        <circle 
-                          cx="18" 
-                          cy="18" 
-                          r="15" 
-                          fill="none" 
-                          className="stroke-blue-500" 
-                          strokeWidth="3"
-                          strokeDasharray={`${(row.outletsVisited / row.outletsAssigned) * 94.2} 94.2`}
-                          transform="rotate(-90 18 18)"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-xl font-bold text-gray-800">{row.outletsVisited}</span>
-                        <span className="text-xs text-gray-500">of {row.outletsAssigned}</span>
+                    {row.visited === "Yes" ? (
+                      <div className="flex justify-center">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-green-100 text-green-800">
+                          <CheckCircle className="w-4 h-4" />
+                          Yes
+                        </span>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="flex justify-center">
+                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-red-100 text-red-800">
+                          <XCircle className="w-4 h-4" />
+                          No
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="p-4 bg-gray-50/30">
                     {(() => {

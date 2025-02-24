@@ -3,120 +3,157 @@ import { Prisma } from "../../lib/prisma/prismaClinet";
 
 
 
-export async function getLocationAnalytic(req: Request, res: Response) {
+export const getLocationAnalytic = async (req: Request, res: Response) => {
     try {
-        const date = req.query.date ? new Date(req.query.date as string) : new Date();
-
-        // Get start and end of the queried date
-        const startDate = new Date(date.setHours(0, 0, 0, 0));
-        const endDate = new Date(date.setHours(23, 59, 59, 999));
-
-        // Fetch all managed locations (not just distributors)
-        const locations = await Prisma.managedLocation.findMany({
-            include: {
-                VisitedLocation: {
-                    where: {
-                        date: {
-                            gte: startDate,
-                            lte: endDate,
-                        },
-                    },
-                    include: {
-                        SalesMan: true,
-                    },
-                    orderBy: {
-                        date: "asc",
-                    },
-                },
-                AssignSalesman: {
-                    include: {
-                        SalesMan: true,
-                    },
-                },
-            },
+      console.log("Fetching location analytics...");
+      
+      // Get ALL salesmen
+      const allSalesmen = await Prisma.salesMan.findMany();
+      console.log(`Total salesmen fetched: ${allSalesmen.length}`);
+      
+      // Get ALL locations
+      const allLocations = await Prisma.managedLocation.findMany();
+      console.log(`Total locations fetched: ${allLocations.length}`);
+      
+      // Get ALL visited locations with related data
+      const visitedLocations = await Prisma.visitedLocation.findMany({
+        include: {
+          Location: true,
+          SalesMan: true,
+        },
+        orderBy: {
+          createdAt: "asc",
+        },
+      });
+      
+      console.log(`Total visited locations fetched: ${visitedLocations.length}`);
+      
+      // Create a map to track which locations have been visited by which salesmen
+      const visitedMap = new Map();
+      
+      // Build our locationAnalytics array
+      const locationAnalytics = [];
+      
+      // Process all visited locations first
+      visitedLocations.forEach(visit => {
+        // Convert createdAt to minutes since midnight (for inTime)
+        const inTimeMinutes = visit.createdAt.getHours() * 60 + visit.createdAt.getMinutes();
+        
+        // Create a unique key for this salesman-location combination
+        const key = `${visit.salesManId}-${visit.locationId}`;
+        visitedMap.set(key, true);
+        
+        locationAnalytics.push({
+          region: visit.Location.region,
+          state: visit.Location.state,
+          storeType: visit.Location.storeType,
+          salesmanName: visit.SalesMan.name,
+          salesmanType: visit.SalesMan.salesManType,
+          locationName: visit.Location.name,
+          address: visit.Location.address,
+          marketName: visit.Location.market_name,
+          inTime: inTimeMinutes,
+          visited: "Yes",
+          visitedDistance: visit.scanDistance,
         });
-
-        const analytics = locations.map((location) => {
-            const visits = location.VisitedLocation;
-            const assignments = location.AssignSalesman;
-
-            // If no visits, return default values
-            if (visits.length === 0) {
-                return {
-                    storeType: location.storeType,
-                    region: location.region || "N/A",
-                    state: location.state || "N/A",
-                    address: location.address || "N/A", // Include Address
-                    salesmanType: assignments.length > 0 ? assignments[0].SalesMan.salesManType : "N/A",
-                    inTime: null,
-                    outTime: null,
-                    outletsVisited: 0,
-                    outletsAssigned: assignments.length,
-                    accuracyPercentage: 0,
-                    accuracyDistance: null, // No visits, so no accuracy distance
-                    visited: "No", // No visits, so "No"
-                    locationName: location.name,
-                    marketName: location.market_name,
-                    salesmanName: assignments.length > 0 ? assignments[0].SalesMan.name : "N/A",
-                };
-            }
-
-            // In-Time (earliest visit)
-            const inTime = visits[0].date;
-
-            // Out-Time (latest visit)
-            const outTime = visits.length > 1 ? visits[visits.length - 1].date : null;
-
-            // Number of outlets visited
-            const outletsVisited = visits.length;
-
-            // Number of outlets assigned
-            const outletsAssigned = assignments.length;
-
-            // Accuracy Calculation (Over 100m non-accurate)
-            const accurateVisits = visits.filter((visit) => visit.scanDistance <= 100).length;
-            const accuracyPercentage = (accurateVisits / visits.length) * 100;
-
-            // Calculate average accuracy distance
-            const totalDistance = visits.reduce((sum, visit) => sum + visit.scanDistance, 0);
-            const accuracyDistance = visits.length > 0 ? (totalDistance / visits.length).toFixed(2) : null; // in meters
-
-            return {
-                storeType: location.storeType, // Added store type field
-                region: location.region || "N/A",
-                state: location.state || "N/A",
-                address: location.address || "N/A", // Include Address
-                salesmanType: visits[0]?.SalesMan?.salesManType || "N/A",
-                inTime: Math.round(inTime.getHours() * 60 + inTime.getMinutes()),
-                outTime: outTime ? Math.round(outTime.getHours() * 60 + outTime.getMinutes()) : null,
-                outletsVisited,
-                outletsAssigned,
-                accuracyPercentage: Math.round(accuracyPercentage * 100) / 100,
-                accuracyDistance, // Added accuracy distance in meters
-                visited: outletsVisited > 0 ? "Yes" : "No", // If at least one visit, mark as "Yes"
-                locationName: location.name,
-                marketName: location.market_name,
-                salesmanName: visits[0]?.SalesMan?.name || "N/A",
-            };
-        });
-
-        res.json({
-            success: true,
-            data: analytics,
-            debug: {
-                dateQueried: date,
-                totalLocations: locations.length,
-                locationsWithVisits: analytics.filter((a) => a.outletsVisited > 0).length,
-            },
-        });
+      });
+      
+      // Now add records for all salesman-location combinations that don't exist
+      for (const salesman of allSalesmen) {
+        for (const location of allLocations) {
+          const key = `${salesman.id}-${location.id}`;
+          
+          // If this combination hasn't been visited yet, add it
+          if (!visitedMap.has(key)) {
+            locationAnalytics.push({
+              region: location.region,
+              state: location.state,
+              storeType: location.storeType,
+              salesmanName: salesman.name,
+              salesmanType: salesman.salesManType,
+              locationName: location.name,
+              address: location.address,
+              marketName: location.market_name,
+              inTime: null,
+              visited: "No",
+              visitedDistance: null,
+            });
+          }
+        }
+      }
+      
+      console.log(`Total location analytics records generated: ${locationAnalytics.length}`);
+      
+      // Debug info - log sample records
+      locationAnalytics.slice(0, 5).forEach((record, index) => {
+        console.log(`Record ${index + 1}:`, JSON.stringify({
+          salesmanName: record.salesmanName,
+          locationName: record.locationName,
+          visited: record.visited,
+          inTime: record.inTime
+        }));
+      });
+      
+      return res.status(200).json({
+        success: true,
+        data: locationAnalytics,
+      });
     } catch (error) {
-        console.error("Error fetching location analytics:", error);
-        res.status(500).json({
-            success: false,
-            error: "Failed to fetch location analytics",
-            details: error instanceof Error ? error.message : "Unknown error",
-        });
+      console.error("Error fetching location analytics:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Internal server error",
+      });
     }
-}
+  };
+  
+  
+  
+
+export const getSalesmanVisits = async (req:Request, res:Response) => {
+    try {
+      const visits = await Prisma.assignSalesman.findMany({
+        include: {
+          Manager: true,
+          SalesMan: true,
+          Location: true,
+        },
+      });
+  
+      const formattedVisits = await Promise.all(
+        visits.map(async (visit) => {
+          // Fetch visited location details
+          const visitedLocation = await Prisma.visitedLocation.findFirst({
+            where: {
+              salesManId: visit.salesManId,
+              locationId: visit.locationId,
+            },
+            orderBy: {
+              createdAt: "asc", // Get earliest visit time
+            },
+          });
+  
+          return {
+            state: visit.Location.state,
+            storeType: visit.Location.storeType,
+            salesman: visit.SalesMan.name,
+            salesmanType: visit.SalesMan.salesManType,
+            storeName: visit.Location.name,
+            address: visit.Location.address,
+            market: visit.Location.market_name,
+            intime: visitedLocation ? visitedLocation.createdAt : null,
+            visited: visitedLocation ? "yes" : "no",
+            scanDistance: visitedLocation ? visitedLocation.scanDistance : null,
+          };
+        })
+      );
+  
+      return res.status(200).json({ success: true, data: formattedVisits });
+    } catch (error) {
+      console.error("Error fetching visits:", error);
+      res.status(500).json({ success: false, message: "Server Error" });
+    }
+  };
+
 
 

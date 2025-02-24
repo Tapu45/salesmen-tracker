@@ -55,7 +55,7 @@ import {
   getAccuracyOverTime,
   getSalesmanSummary,
 } from "./apiFunctions";
-import { LocationAnalyticResponse } from "../types/detailedResponseType";
+import { LocationAnalyticResponse } from "../types/salesmanResponse";
 
 const useSalesmenCount = () => {
   return useQuery<SalesmanCountResponse>({
